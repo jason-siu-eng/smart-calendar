@@ -117,8 +117,7 @@ function SmartCalendar() {
         apiKey:        API_KEY,
         clientId:      CLIENT_ID,
         discoveryDocs: DISCOVERY_DOCS,
-        scope:         SCOPES,
-        redirect_uri:  'https://auto-smart-calendar.netlify.app/'
+        scope:         SCOPES
       }).then(()=>{
         const auth = gapi.auth2.getAuthInstance();
         auth.isSignedIn.listen(s=>{
