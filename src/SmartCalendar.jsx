@@ -68,8 +68,6 @@ export default function SmartCalendar() {
   const [darkMode,   setDarkMode]   = useState(false);
   const [userSetEndTime, setUserSetEndTime] = useState({});
   const [weekStart,  setWeekStart]  = useState(() => startOfWeek(new Date()));
-  const [showPast,   setShowPast]   = useState(false);
-
   // --------- Persists ---------
   const [events, setEvents] = useState(() => JSON.parse(localStorage.getItem('smartcalendar-events')) || {});
   const [tasks,  setTasks]  = useState(() => JSON.parse(localStorage.getItem('smartcalendar-tasks'))  || {});
@@ -354,49 +352,45 @@ export default function SmartCalendar() {
     <div className={darkMode ? 'bg-gray-900 text-white min-h-screen' : 'bg-white text-black min-h-screen'}>
       <div className="p-4 max-w-7xl mx-auto">
 
-        {/* NAV / GOOGLE AUTH */}
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex gap-2">
-            <button
-              onClick={()=> setWeekStart(d=>{ const n=new Date(d); n.setDate(n.getDate()-7); return n; })}
-              className="px-3 py-1 bg-gray-300 rounded"
-            >Prev Week</button>
+{/* NAV / GOOGLE AUTH */}
+<div className="flex justify-between items-center mb-4">
+  <div className="flex gap-2">
+    <button
+      onClick={() => setWeekStart(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })}
+      className="px-3 py-1 bg-gray-300 rounded"
+    >Prev Week</button>
 
-            <button
-              onClick={()=>setDarkMode(dm=>!dm)}
-              className="px-3 py-1 bg-gray-300 rounded"
-            >{darkMode ? 'Light' : 'Dark'} Mode</button>
+    <button
+      onClick={() => setWeekStart(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })}
+      className="px-3 py-1 bg-gray-300 rounded"
+    >Next Week</button>
 
-            <button
-              onClick={()=>setShowPast(p=>!p)}
-              className="px-3 py-1 bg-gray-300 rounded"
-            >{showPast ? 'Hide Past' : 'Show Past'}</button>
+    <button
+      onClick={() => setDarkMode(dm => !dm)}
+      className="px-3 py-1 bg-gray-300 rounded"
+    >{darkMode ? 'Light' : 'Dark'} Mode</button>
 
-            <button
-              onClick={clearAll}
-              className="px-3 py-1 bg-red-400 text-white rounded"
-            >Clear Calendar</button>
-          </div>
+    <button
+      onClick={clearAll}
+      className="px-3 py-1 bg-red-400 text-white rounded"
+    >Clear Calendar</button>
+  </div>
 
-          <div className="flex gap-2">
-            {accessToken ? (
-              <button
-                onClick={()=>{ setAccessToken(null); }}
-                className="px-3 py-1 bg-red-600 text-white rounded"
-              >Sign Out</button>
-            ) : (
-              <a
-                href={buildGoogleAuthUrl()}
-                className="px-3 py-1 bg-blue-600 text-white rounded"
-              >Sync Google</a>
-            )}
+  <div className="flex gap-2">
+    {accessToken ? (
+      <button
+        onClick={() => { setAccessToken(null); }}
+        className="px-3 py-1 bg-red-600 text-white rounded"
+      >Sign Out</button>
+    ) : (
+      <a
+        href={buildGoogleAuthUrl()}
+        className="px-3 py-1 bg-blue-600 text-white rounded"
+      >Sync Google</a>
+    )}
+  </div>
+</div>
 
-            <button
-              onClick={()=> setWeekStart(d=>{ const n=new Date(d); n.setDate(n.getDate()+7); return n; })}
-              className="px-3 py-1 bg-gray-300 rounded"
-            >Next Week</button>
-          </div>
-        </div>
 
         {/* WEEK LABEL */}
         <h1 className="text-2xl font-bold mb-4">
