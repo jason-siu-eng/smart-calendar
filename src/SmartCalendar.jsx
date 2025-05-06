@@ -360,10 +360,14 @@ useEffect(() => {
 
   // ------------- CLEAR ALL -------------
   const clearAll = () => {
-    setEvents({}); setTasks({});
-    localStorage.removeItem('smartcalendar-events');
-    localStorage.removeItem('smartcalendar-tasks');
+    if (window.confirm("Are you sure you want to clear all events and tasks? This cannot be undone.")) {
+      setEvents({});
+      setTasks({});
+      localStorage.removeItem('smartcalendar-events');
+      localStorage.removeItem('smartcalendar-tasks');
+    }
   };
+  
 
   // ------------- DRAG & DROP -------------
   const handleDragStart = (e,evt,dk) => {
