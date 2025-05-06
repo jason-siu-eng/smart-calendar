@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { gapi } from 'gapi-script';
 
 // ------------- CONSTANTS -------------
+
 const initialCategoryColors = {
   work: 'bg-blue-200',
   class: 'bg-orange-200',
@@ -15,9 +16,12 @@ const colorOptions = [
   'bg-blue-200','bg-orange-200','bg-green-200','bg-purple-200','bg-yellow-200',
   'bg-pink-200','bg-red-200'
 ];
-const hours         = Array.from({ length:24 },(_,i)=>i.toString().padStart(2,'0'));
 const minuteOptions = ['00','15','30','45'];
-const gridHours     = hours.map(h=>`${h}:00`);
+const gridHours = Array.from({ length: 24 }, (_, i) => {
+  const hour = i % 12 === 0 ? 12 : i % 12;
+  const suffix = i < 12 ? 'AM' : 'PM';
+  return `${hour}:00 ${suffix}`;
+});
 const days          = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
 // Google OAuth info
@@ -34,6 +38,15 @@ function startOfWeek(date) {
   d.setHours(0,0,0,0);
   return d;
 }
+
+function formatTime(timeStr) {
+  const [h, m] = timeStr.split(':').map(Number);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  let hour12 = h % 12;
+  if (hour12 === 0) hour12 = 12;
+  return `${hour12}:${m.toString().padStart(2, '0')} ${suffix}`;
+}
+
 
 function categorizeEvent(title='') {
   const t = title?.toLowerCase() || '';
@@ -65,12 +78,16 @@ const buildGoogleAuthUrl = () => {
 
 export default function SmartCalendar() {
   // ----------- UI STATE ------------
-  const [darkMode,   setDarkMode]   = useState(false);
   const [userSetEndTime, setUserSetEndTime] = useState({});
   const [weekStart,  setWeekStart]  = useState(() => startOfWeek(new Date()));
   // --------- Persists ---------
   const [events, setEvents] = useState(() => JSON.parse(localStorage.getItem('smartcalendar-events')) || {});
   const [tasks,  setTasks]  = useState(() => JSON.parse(localStorage.getItem('smartcalendar-tasks'))  || {});
+  const hasIncompleteTasks = dk => {
+    const list = tasks[dk] || [];
+    return list.some(task => !task.completed);
+  };
+  
 
   // ----------- Helpers/UI ------------
   const [categoryColors, setCategoryColors] = useState(initialCategoryColors);
@@ -85,6 +102,9 @@ export default function SmartCalendar() {
   const [startMins,  setStartMins ] = useState({});
   const [endHours,   setEndHours ]  = useState({});
   const [endMins,    setEndMins ]   = useState({});
+  const [startAmPm, setStartAmPm] = useState({});
+  const [endAmPm, setEndAmPm] = useState({});
+
 
   // Persist to localStorage
   useEffect(() => { localStorage.setItem('smartcalendar-events', JSON.stringify(events)); }, [events]);
@@ -110,17 +130,29 @@ export default function SmartCalendar() {
 
   // On mount: if URL hash has a token, grab it
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.includes('access_token')) {
-      const params = new URLSearchParams(hash.substring(1));
-      const token = params.get('access_token');
-      if (token) {
-        // clear the hash so it’s not lingering
-        window.history.replaceState(null, '', window.location.pathname);
-        setAccessToken(token);
+    dateKeys.forEach(dk => {
+      const sh = startHours[dk], sm = startMins[dk], ap = startAmPm[dk];
+      if (sh && sm && ap && !userSetEndTime[dk]) {
+        let hour24 = parseInt(sh, 10);
+        if (ap === 'PM' && hour24 !== 12) hour24 += 12;
+        if (ap === 'AM' && hour24 === 12) hour24 = 0;
+  
+        const startTotalMin = hour24 * 60 + parseInt(sm, 10);
+        const endTotalMin = (startTotalMin + 60) % (24 * 60);
+        const endHour24 = Math.floor(endTotalMin / 60);
+        const endMin = String(endTotalMin % 60).padStart(2, '0');
+  
+        const endAmPmVal = endHour24 >= 12 ? 'PM' : 'AM';
+        let endHour12 = endHour24 % 12;
+        if (endHour12 === 0) endHour12 = 12;
+  
+        setEndHours(h => ({ ...h, [dk]: String(endHour12).padStart(2, '0') }));
+        setEndMins(m => ({ ...m, [dk]: endMin }));
+        setEndAmPm(am => ({ ...am, [dk]: endAmPmVal }));
       }
-    }
-  }, []);
+    });
+  }, [startHours, startMins, startAmPm, dateKeys, userSetEndTime]);
+  
 
   // Once we have a token, initialize gapi and fetch events
   useEffect(() => {
@@ -223,55 +255,70 @@ export default function SmartCalendar() {
 
   // ------------- ADD EVENT w/ REPEAT -------------
   const addEvent = dk => {
-    const title = formVisible[`title-${dk}`]   || '';
+    const title = formVisible[`title-${dk}`] || '';
     const sh    = startHours[dk], sm = startMins[dk];
     const eh    = endHours[dk],   em = endMins[dk];
-    const rpt   = formVisible[`repeat-${dk}`]  || 'None';
+    const sap   = startAmPm[dk] || 'AM';
+    const eap   = endAmPm[dk]   || 'AM';
+    const rpt   = formVisible[`repeat-${dk}`] || 'None';
+  
     if (!title || !sh || !sm || !eh || !em) return;
-
+  
+    const convertTo24 = (h, ap) => {
+      let hour = parseInt(h, 10);
+      if (ap === 'PM' && hour !== 12) hour += 12;
+      if (ap === 'AM' && hour === 12) hour = 0;
+      return hour.toString().padStart(2, '0');
+    };
+  
+    const sh24 = convertTo24(sh, sap);
+    const eh24 = convertTo24(eh, eap);
+  
     const seriesId = Date.now() + Math.random();
     const base = {
       id:        seriesId,
       title,
-      startTime: `${sh}:${sm}`,
-      endTime:   `${eh}:${em}`,
+      startTime: `${sh24}:${sm}`,
+      endTime:   `${eh24}:${em}`,
       category:  categorizeEvent(title),
       completed: false
     };
-
+  
     setEvents(prev => {
       const nxt = { ...prev };
       const pushOn = iso => {
         if (!nxt[iso]) nxt[iso] = [];
         nxt[iso].push({ ...base });
       };
-      // first
       pushOn(dk);
       if (rpt !== 'None') {
         const limit = new Date(); limit.setMonth(limit.getMonth()+3);
         const step  = rpt === 'Daily' ? 1 : 7;
         const tmp   = new Date(dk);
-        while(tmp <= limit) {
-          tmp.setDate(tmp.getDate()+step);
+        while (tmp <= limit) {
+          tmp.setDate(tmp.getDate() + step);
           pushOn(tmp.toISOString().split('T')[0]);
         }
       }
       return nxt;
     });
-
-    // reset
-    setFormVisible(fv=>({
+  
+    // Reset form
+    setFormVisible(fv => ({
       ...fv,
-      [`title-${dk}`]:   '',
-      [`event-${dk}`]:   false,
-      [`repeat-${dk}`]:  'None'
+      [`title-${dk}`]: '',
+      [`event-${dk}`]: false,
+      [`repeat-${dk}`]: 'None'
     }));
-    setStartHours(h=>({ ...h, [dk]: '' }));
-    setStartMins( m=>({ ...m, [dk]: '' }));
-    setEndHours(  h=>({ ...h, [dk]: '' }));
-    setEndMins(   m=>({ ...m, [dk]: '' }));
+    setStartHours(h => ({ ...h, [dk]: '' }));
+    setStartMins(m  => ({ ...m, [dk]: '' }));
+    setEndHours(h   => ({ ...h, [dk]: '' }));
+    setEndMins(m    => ({ ...m, [dk]: '' }));
+    setStartAmPm(a  => ({ ...a, [dk]: 'AM' }));
+    setEndAmPm(a    => ({ ...a, [dk]: 'AM' }));
     setUserSetEndTime(u => ({ ...u, [dk]: false }));
   };
+  
 
   // ------------- TASK HELPERS -------------
   const addTask = dk => {
@@ -313,83 +360,128 @@ export default function SmartCalendar() {
       JSON.stringify({ id:evt.id, dateKey:dk })
     );
   };
-  const handleDrop = (e,dk,hour) => {
-    e.preventDefault(); setDragHover(null);
+  const handleDrop = (e, dk, hour) => {
+    e.preventDefault();
+    setDragHover(null);
+  
     const data = JSON.parse(e.dataTransfer.getData('application/json'));
     if (!data) return;
-
-    const rect    = e.currentTarget.getBoundingClientRect();
-    const rawMin  = ((e.clientY - rect.top) / rect.height) * 60;
+  
+    // Snap drop to nearest 15-minute increment
+    const rect = e.currentTarget.getBoundingClientRect();
+    const rawMin = ((e.clientY - rect.top) / rect.height) * 60;
     const snapped = Math.round(rawMin / 15) * 15;
-    const newStart= Number(hour)*60 + snapped;
-
+    const newStart = hour * 60 + snapped;
+  
     setEvents(prev => {
-      const col   = prev[data.dateKey] || [];
-      const found = col.find(x=> x.id===data.id);
-      if (!found) return prev;
-      const rest  = col.filter(x=> x.id!==data.id);
-
-      const [oSh,oSm] = found.startTime.split(':').map(Number);
-      const [oEh,oEm] = found.endTime.split(':').map(Number);
-      const dur       = (oEh*60+oEm) - (oSh*60+oSm);
-
-      const moved = {
-        ...found,
-        startTime:`${String(Math.floor(newStart/60)).padStart(2,'0')}:${String(newStart%60).padStart(2,'0')}`,
-        endTime:  `${String(Math.floor((newStart+dur)/60)%24).padStart(2,'0')}:${String((newStart+dur)%60).padStart(2,'0')}`
+      const oldDayEvents = prev[data.dateKey] || [];
+      const eventToMove = oldDayEvents.find(x => x.id === data.id);
+      if (!eventToMove) return prev;
+  
+      // Remove event from original day
+      const updatedOldDay = oldDayEvents.filter(x => x.id !== data.id);
+  
+      // Duration calculation
+      const [oSh, oSm] = eventToMove.startTime.split(':').map(Number);
+      const [oEh, oEm] = eventToMove.endTime.split(':').map(Number);
+      const duration = (oEh * 60 + oEm) - (oSh * 60 + oSm);
+  
+      // New start and end time
+      const newStartH = Math.floor(newStart / 60);
+      const newStartM = newStart % 60;
+      const newEnd = newStart + duration;
+      const newEndH = Math.floor(newEnd / 60) % 24;
+      const newEndM = newEnd % 60;
+  
+      const newEvent = {
+        ...eventToMove,
+        startTime: `${String(newStartH).padStart(2, '0')}:${String(newStartM).padStart(2, '0')}`,
+        endTime:   `${String(newEndH).padStart(2, '0')}:${String(newEndM).padStart(2, '0')}`
       };
-
-      const nxt = { ...prev, [data.dateKey]: rest };
-      nxt[dk]   = dk===data.dateKey
-        ? [...rest, moved]
-        : [...(nxt[dk]||[]), moved];
-      return nxt;
+  
+      const updatedEvents = { ...prev };
+  
+      // Update old date
+      updatedEvents[data.dateKey] = updatedOldDay;
+  
+      // Add to new date
+      updatedEvents[dk] = [...(updatedEvents[dk] || []), newEvent];
+  
+      // Sort by start time to avoid overlaps or incorrect stacking
+      updatedEvents[dk].sort((a, b) => a.startTime.localeCompare(b.startTime));
+  
+      return updatedEvents;
     });
   };
+return (
+  <div className="bg-white text-black min-h-screen">
+    <div className="p-4 max-w-7xl mx-auto">
 
-  // ------------- RENDER -------------
-  return (
-    <div className={darkMode ? 'bg-gray-900 text-white min-h-screen' : 'bg-white text-black min-h-screen'}>
-      <div className="p-4 max-w-7xl mx-auto">
-
-{/* NAV / GOOGLE AUTH */}
-<div className="flex justify-between items-center mb-4">
-  <div className="flex gap-2">
+      {/* NAV / GOOGLE AUTH */}
+{/* NAVIGATION BAR */}
+<div className="flex items-center justify-between mb-4">
+  {/* LEFT CONTROLS */}
+  <div className="flex items-center space-x-2">
     <button
-      onClick={() => setWeekStart(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })}
-      className="px-3 py-1 bg-gray-300 rounded"
-    >Prev Week</button>
-
+      onClick={() => setWeekStart(startOfWeek(new Date()))}
+      className="border border-gray-400 text-sm px-4 py-1 rounded-full hover:bg-gray-100"
+    >
+      Today
+    </button>
     <button
-      onClick={() => setWeekStart(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })}
-      className="px-3 py-1 bg-gray-300 rounded"
-    >Next Week</button>
-
+      onClick={() => setWeekStart(d => {
+        const n = new Date(d);
+        n.setDate(n.getDate() - 7);
+        return n;
+      })}
+      className="text-xl px-2"
+    >
+      &lt;
+    </button>
     <button
-      onClick={() => setDarkMode(dm => !dm)}
-      className="px-3 py-1 bg-gray-300 rounded"
-    >{darkMode ? 'Light' : 'Dark'} Mode</button>
-
+      onClick={() => setWeekStart(d => {
+        const n = new Date(d);
+        n.setDate(n.getDate() + 7);
+        return n;
+      })}
+      className="text-xl px-2"
+    >
+      &gt;
+    </button>
     <button
       onClick={clearAll}
-      className="px-3 py-1 bg-red-400 text-white rounded"
-    >Clear Calendar</button>
+      className="ml-2 px-3 py-1 bg-red-400 text-white text-sm rounded"
+    >
+      Clear Calendar
+    </button>
   </div>
 
-  <div className="flex gap-2">
+  {/* CENTER: Current Month + Year */}
+  <div className="text-lg font-semibold">
+    {weekStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+  </div>
+
+  {/* RIGHT: Google Auth */}
+  <div>
     {accessToken ? (
       <button
-        onClick={() => { setAccessToken(null); }}
-        className="px-3 py-1 bg-red-600 text-white rounded"
-      >Sign Out</button>
+        onClick={() => setAccessToken(null)}
+        className="px-3 py-1 bg-red-600 text-white text-sm rounded"
+      >
+        Sign Out
+      </button>
     ) : (
       <a
         href={buildGoogleAuthUrl()}
-        className="px-3 py-1 bg-blue-600 text-white rounded"
-      >Sync Google</a>
+        className="px-3 py-1 bg-blue-600 text-white text-sm rounded"
+      >
+        Sync Google
+      </a>
     )}
   </div>
 </div>
+
+
 
 
         {/* WEEK LABEL */}
@@ -402,7 +494,13 @@ export default function SmartCalendar() {
           <div /> {/* corner */}
           {dateKeys.map((dk, idx) => (
             <div key={dk} className="border-b pb-2">
-              <div className="text-center font-semibold">{headerLabels[idx]}</div>
+<div
+  className={`text-center font-semibold rounded px-1 ${
+    dk === new Date().toISOString().split('T')[0] ? 'bg-blue-100' : ''
+  }`}
+>
+  {headerLabels[idx]}
+</div>
 
               {/* Add Event */}
               <button
@@ -428,40 +526,68 @@ export default function SmartCalendar() {
                     <option value="Weekly">Repeat Weekly</option>
                   </select>
 
-                  <div className="flex gap-1">
-                    <select
-                      className="border p-1 text-sm flex-1"
-                      value={startHours[dk]||''}
-                      onChange={e=>onStartHour(dk,e.target.value)}
-                    >
-                      <option value="">HH</option>
-                      {hours.map(h=><option key={h} value={h}>{h}</option>)}
-                    </select>
-                    <select
-                      className="border p-1 text-sm flex-1"
-                      value={startMins[dk]||''}
-                      onChange={e=>onStartMin(dk,e.target.value)}
-                    >
-                      <option value="">MM</option>
-                      {minuteOptions.map(m=><option key={m} value={m}>{m}</option>)}
-                    </select>
-                    <select
-                      className="border p-1 text-sm flex-1"
-                      value={endHours[dk]||''}
-                      onChange={e=>onEndHour(dk,e.target.value)}
-                    >
-                      <option value="">HH</option>
-                      {hours.map(h=><option key={h} value={h}>{h}</option>)}
-                    </select>
-                    <select
-                      className="border p-1 text-sm flex-1"
-                      value={endMins[dk]||''}
-                      onChange={e=>onEndMin(dk,e.target.value)}
-                    >
-                      <option value="">MM</option>
-                      {minuteOptions.map(m=><option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
+                  <div className="flex flex-col gap-2">
+  <div className="flex gap-1">
+    <select
+      className="border p-1 text-sm flex-1"
+      value={startHours[dk] || ''}
+      onChange={e => onStartHour(dk, e.target.value)}
+    >
+      <option value="">HH</option>
+      {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(h => (
+        <option key={h} value={h}>{h}</option>
+      ))}
+    </select>
+    <select
+      className="border p-1 text-sm flex-1"
+      value={startMins[dk] || ''}
+      onChange={e => onStartMin(dk, e.target.value)}
+    >
+      <option value="">MM</option>
+      {minuteOptions.map(m => <option key={m} value={m}>{m}</option>)}
+    </select>
+    <select
+  className="border p-1 text-sm flex-1"
+  value={startAmPm[dk] || 'AM'}
+  onChange={e => setStartAmPm(a => ({ ...a, [dk]: e.target.value }))}
+>
+  <option value="AM">AM</option>
+  <option value="PM">PM</option>
+</select>
+
+  </div>
+
+  <div className="flex gap-1">
+    <select
+      className="border p-1 text-sm flex-1"
+      value={endHours[dk] || ''}
+      onChange={e => onEndHour(dk, e.target.value)}
+    >
+      <option value="">HH</option>
+      {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(h => (
+        <option key={h} value={h}>{h}</option>
+      ))}
+    </select>
+    <select
+      className="border p-1 text-sm flex-1"
+      value={endMins[dk] || ''}
+      onChange={e => onEndMin(dk, e.target.value)}
+    >
+      <option value="">MM</option>
+      {minuteOptions.map(m => <option key={m} value={m}>{m}</option>)}
+    </select>
+    <select
+  className="border p-1 text-sm flex-1"
+  value={endAmPm[dk] || 'AM'}
+  onChange={e => setEndAmPm(a => ({ ...a, [dk]: e.target.value }))}
+>
+  <option value="AM">AM</option>
+  <option value="PM">PM</option>
+</select>
+
+  </div>
+</div>
+
 
                   <button
                     onClick={()=>addEvent(dk)}
@@ -471,10 +597,18 @@ export default function SmartCalendar() {
               )}
 
               {/* Add Task */}
-              <button
-                onClick={()=>toggleForm(`tasks-${dk}`)}
-                className="mt-1 w-full bg-gray-600 text-white py-1 text-sm rounded"
-              >Tasks</button>
+{/* Add Task */}
+{/* Add Task */}
+<button
+  onClick={() => toggleForm(`tasks-${dk}`)}
+  className="relative mt-1 w-full bg-gray-600 text-white py-1 text-sm rounded text-center"
+>
+  Tasks
+  {hasIncompleteTasks(dk) && (
+    <span className="absolute right-2 top-1.35 transform -translate-y-1/2 text-red-400 font-bold animate-bounce">!</span>
+  )}
+</button>
+
               {formVisible[`tasks-${dk}`] && (
                 <motion.div initial={{ height:0, opacity:0 }} animate={{ height:'auto', opacity:1 }} className="mt-2 p-2 bg-gray-100 rounded space-y-2">
                   <input
@@ -536,8 +670,15 @@ export default function SmartCalendar() {
                       const pct = Math.round((y/r.height)*60/15)*15;
                       setDragHover({ dateKey: dk, hour: h.split(':')[0], minute: pct });
                     }}
-                    onDrop={e=>handleDrop(e, dk, h.split(':')[0])}
-                    initial={{ minHeight:48 }}
+                    onDrop={e => {
+                      const hourString = h.split(' ')[0];     // "1:00"
+                      const ampm = h.split(' ')[1];           // "AM" or "PM"
+                      let hour = parseInt(hourString.split(':')[0], 10);
+                      if (ampm === 'PM' && hour !== 12) hour += 12;
+                      if (ampm === 'AM' && hour === 12) hour = 0;
+                      handleDrop(e, dk, hour);
+                    }}
+                                        initial={{ minHeight:48 }}
                     animate={{ minHeight:48 }}
                     transition={{ duration:0.2 }}
                   >
@@ -554,7 +695,11 @@ export default function SmartCalendar() {
                       const [sh,sm] = evt.startTime.split(':').map(Number);
                       const [eh,em] = evt.endTime.split(':').map(Number);
                       const s = sh*60 + sm, e = eh*60 + em;
-                      const base = Number(h.split(':')[0])*60;
+const [hourStr, ampm] = h.split(' ');
+let baseHour = parseInt(hourStr.split(':')[0], 10);
+if (ampm === 'PM' && baseHour !== 12) baseHour += 12;
+if (ampm === 'AM' && baseHour === 12) baseHour = 0;
+const base = baseHour * 60;
                       if (s < base || s >= base+60) return null;
 
                       const overlaps = all.filter(x=>{
@@ -615,8 +760,9 @@ export default function SmartCalendar() {
                             />
                           </div>
                           <div className="text-[10px] text-black">
-                            {evt.startTime} – {evt.endTime}
-                          </div>
+  {formatTime(evt.startTime)} – {formatTime(evt.endTime)}
+</div>
+
                         </div>
                       );
                     })}
