@@ -471,11 +471,6 @@ return (
     </button>
   </div>
 
-  {/* CENTER: Current Month + Year */}
-  <div className="text-lg font-semibold">
-    {weekStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-  </div>
-
   {/* RIGHT: Google Auth */}
   <div>
     {accessToken ? (
