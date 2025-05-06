@@ -116,7 +116,7 @@ export default function SmartCalendar() {
     d.setDate(d.getDate() + i);
     return d;
   });
-  const dateKeys = weekDates.map(d => d.toISOString().split('T')[0]);
+  const dateKeys = weekDates.map(d => d.toLocaleDateString('sv-SE'));
 
   // Friendly column headers: “Monday 4/21”
   const headerLabels = weekDates.map(d => {
@@ -127,6 +127,17 @@ export default function SmartCalendar() {
 
   // ------------- REDIRECT-FLOW AUTH -------------
   const [accessToken, setAccessToken] = useState(null);
+
+// On first load: check if access_token is in the URL hash
+useEffect(() => {
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const token = hashParams.get("access_token");
+  if (token) {
+    setAccessToken(token);
+    window.history.replaceState(null, null, window.location.pathname); // Clean up the URL
+  }
+}, []);
+
 
   // On mount: if URL hash has a token, grab it
   useEffect(() => {
@@ -496,7 +507,7 @@ return (
             <div key={dk} className="border-b pb-2">
 <div
   className={`text-center font-semibold rounded px-1 ${
-    dk === new Date().toISOString().split('T')[0] ? 'bg-blue-100' : ''
+    dk === new Date().toLocaleDateString('sv-SE') ? 'bg-blue-100' : ''
   }`}
 >
   {headerLabels[idx]}
