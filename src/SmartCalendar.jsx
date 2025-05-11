@@ -76,6 +76,7 @@ const buildGoogleAuthUrl = () => {
   return `${root}?${query}`;
 };
 
+
 export default function SmartCalendar() {
   // ----------- UI STATE ------------
   const [userSetEndTime, setUserSetEndTime] = useState({});
@@ -96,6 +97,8 @@ export default function SmartCalendar() {
   const [editingTask,    setEditingTask]    = useState(null);
   const [hoveredEvent,   setHoveredEvent]   = useState(null);
   const [dragHover,      setDragHover]      = useState(null);
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [editFields, setEditFields] = useState({ title: '', start: '', end: '', details: '' });
 
   // Time selects by date
   const [startHours, setStartHours] = useState({});
@@ -137,6 +140,30 @@ useEffect(() => {
     window.history.replaceState(null, null, window.location.pathname); // Clean up the URL
   }
 }, []);
+
+
+// upcoming event
+
+const getNextEvent = () => {
+  const now = new Date();
+  const upcoming = [];
+
+  Object.entries(events).forEach(([date, eventList]) => {
+    eventList.forEach(evt => {
+      const [hour, minute] = evt.startTime.split(':').map(Number);
+      const [year, month, day] = date.split('-').map(Number); // YYYY-MM-DD
+      const eventDate = new Date(year, month - 1, day, hour, minute); // local time
+      if (eventDate > now) {
+        upcoming.push({ ...evt, date: eventDate });
+      }
+    });
+  });
+
+  upcoming.sort((a, b) => a.date - b.date);
+  return upcoming[0];
+};
+
+
 
 
   // On mount: if URL hash has a token, grab it
@@ -430,14 +457,14 @@ useEffect(() => {
   };
 return (
   <div className="bg-white text-black min-h-screen">
-    <div className="p-4 max-w-7xl mx-auto">
+<div className="px-28 py-4 max-w-full">
 
       {/* NAV / GOOGLE AUTH */}
 {/* NAVIGATION BAR */}
 <div className="flex items-center justify-between mb-4">
   {/* LEFT CONTROLS */}
-  <div className="flex items-center space-x-2">
-    <button
+  <div className="flex items-center space-x-2 pl-1">
+  <button
       onClick={() => setWeekStart(startOfWeek(new Date()))}
       className="border border-gray-400 text-sm px-4 py-1 rounded-full hover:bg-gray-100"
     >
@@ -471,8 +498,24 @@ return (
     </button>
   </div>
 
-  {/* RIGHT: Google Auth */}
-  <div>
+{/* RIGHT: Upcoming Event + Google Auth */}
+<div
+  className="flex items-center justify-center space-x-4 bg-blue-600 text-white px-4 py-2 rounded shadow-sm text-sm max-w-full overflow-hidden transform"
+  style={{ transform: 'translateX(-0.9in)' }}
+>
+  {getNextEvent() ? (
+    <>
+      <span className="font-semibold">Next:</span>
+      <span className="truncate max-w-[200px]">{getNextEvent().title}</span>
+      <span className="text-xs text-gray-200">{formatTime(getNextEvent().startTime)}</span>
+    </>
+  ) : (
+    <span className="text-gray-200">No upcoming events</span>
+  )}
+</div>
+
+
+
     {accessToken ? (
       <button
         onClick={() => setAccessToken(null)}
@@ -490,18 +533,16 @@ return (
     )}
   </div>
 </div>
-
-
-
-
         {/* WEEK LABEL */}
-        <h1 className="text-2xl font-bold mb-4">
-          Week of {weekStart.toLocaleDateString()}
-        </h1>
+        <h1 className="text-2xl font-bold mb-4 px-28">
+        Week of {weekStart.toLocaleDateString()}
+</h1>
+
 
         {/* DAY HEADERS + ADD FORMS */}
-        <div className="grid grid-cols-[100px_repeat(7,1fr)] gap-1 mb-2">
-          <div /> {/* corner */}
+        <div className="px-4">
+  <div className="grid grid-cols-[100px_repeat(7,1fr)] gap-1 mb-2">
+          <div /> 
           {dateKeys.map((dk, idx) => (
             <div key={dk} className="border-b pb-2">
 <div
@@ -662,17 +703,18 @@ return (
             </div>
           ))}
         </div>
-
+        </div>
         {/* TIME GRID + EVENTS */}
         <div className="relative overflow-y-auto max-h-[70vh]">
-          <div className="grid grid-cols-[100px_repeat(7,1fr)] gap-1">
-            {gridHours.map(h=>(
+        <div className="px-4">
+  <div className="grid grid-cols-[100px_repeat(7,1fr)] gap-1">
+        {gridHours.map(h=>(
               <React.Fragment key={h}>
                 <div className="text-sm border-t py-2 pr-2 text-right">{h}</div>
                 {dateKeys.map(dk=>(
                   <motion.div
                     key={`${dk}-${h}`}
-                    className="relative border-t"
+                    className="relative border-t border-r border-gray-200"
                     onDragOver={e=>{
                       e.preventDefault();
                       const r = e.currentTarget.getBoundingClientRect();
@@ -693,6 +735,35 @@ return (
                     transition={{ duration:0.2 }}
                   >
                     {/* drop highlight */}
+
+{/* current time indicator */}
+{(() => {
+  const now = new Date();
+  const todayKey = now.toLocaleDateString('sv-SE');
+  if (dk !== todayKey) return null;
+
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+  const [labelHour, ampm] = h.split(' ');
+  let baseHour = parseInt(labelHour.split(':')[0], 10);
+  if (ampm === 'PM' && baseHour !== 12) baseHour += 12;
+  if (ampm === 'AM' && baseHour === 12) baseHour = 0;
+
+  if (hour !== baseHour) return null;
+
+  const topPercent = (minute / 60) * 100;
+
+  return (
+    <div
+      className="absolute left-0 right-0 bg-red-500 h-0.5 z-50"
+      style={{ top: `${topPercent}%` }}
+    >
+      <div className="w-2 h-2 bg-red-500 rounded-full absolute -left-1 top-[-4px]" />
+    </div>
+  );
+})()}
+
+
                     {dragHover?.dateKey===dk && dragHover.hour===h.split(':')[0] && (
                       <div
                         className="absolute left-0 right-0 bg-blue-400"
@@ -701,88 +772,242 @@ return (
                     )}
 
                     {/* events */}
-                    {(events[dk]||[]).map((evt,_,all)=>{
-                      const [sh,sm] = evt.startTime.split(':').map(Number);
-                      const [eh,em] = evt.endTime.split(':').map(Number);
-                      const s = sh*60 + sm, e = eh*60 + em;
-const [hourStr, ampm] = h.split(' ');
-let baseHour = parseInt(hourStr.split(':')[0], 10);
-if (ampm === 'PM' && baseHour !== 12) baseHour += 12;
-if (ampm === 'AM' && baseHour === 12) baseHour = 0;
-const base = baseHour * 60;
-                      if (s < base || s >= base+60) return null;
+                    {(events[dk] || []).map((evt, _, all) => {
+  const [sh, sm] = evt.startTime.split(':').map(Number);
+  const [eh, em] = evt.endTime.split(':').map(Number);
+  const s = sh * 60 + sm,
+        e = eh * 60 + em;
 
-                      const overlaps = all.filter(x=>{
-                        const [os,om]=x.startTime.split(':').map(Number);
-                        const [oe,om2]=x.endTime.split(':').map(Number);
-                        return os*60+om < e && oe*60+om2 > s;
-                      });
-                      const idx  = overlaps.findIndex(x=>x.id===evt.id);
-                      const wPct = 100 / overlaps.length;
-                      const lPct = idx * wPct;
-                      const topPx= (s - base)/15*12;
-                      const hPx  = (e - s)/15*12;
+  const [hourStr, ampm] = h.split(' ');
+  let baseHour = parseInt(hourStr.split(':')[0], 10);
+  if (ampm === 'PM' && baseHour !== 12) baseHour += 12;
+  if (ampm === 'AM' && baseHour === 12) baseHour = 0;
+  const base = baseHour * 60;
 
-                      return (
-                        <div
-                          key={evt.id}
-                          draggable
-                          onDragStart={e=>handleDragStart(e,evt,dk)}
-                          onMouseEnter={()=>setHoveredEvent(evt.id)}
-                          onMouseLeave={()=>setHoveredEvent(null)}
-                          className={`${categoryColors[evt.category]} absolute m-1 p-1 text-xs rounded ${
-                            evt.completed ? 'opacity-50 line-through' : ''
-                          }`}
-                          style={{
-                            top:`${topPx}px`, left:`${lPct}%`,
-                            width:`${wPct}%`, minHeight:`${hPx}px`,
-                            whiteSpace:'normal', overflowWrap:'break-word',
-                            zIndex:1
-                          }}
-                        >
-                          {/* color picker */}
-                          {hoveredEvent===evt.id && wPct>50 && (
-                            <div className="absolute top-1 left-1 flex gap-1">
-                              {colorOptions.map(c=>(
-                                <button
-                                  key={c}
-                                  onClick={()=>setCategoryColors(pc=>({...pc,[evt.category]:c}))}
-                                  className={`${c} w-2.5 h-2.5 rounded-full border border-white hover:scale-110`}
-                                />
-                              ))}
-                            </div>
-                          )}
+  if (s < base || s >= base + 60) return null;
 
-                          {/* delete */}
-                          {hoveredEvent===evt.id && (
-                            <button
-                              onClick={()=>deleteEvent(dk,evt.id)}
-                              className="absolute bottom-1 right-1 p-1 text-black"
-                            >🗑️</button>
-                          )}
+  const overlaps = all.filter(x => {
+    const [os, om] = x.startTime.split(':').map(Number);
+    const [oe, om2] = x.endTime.split(':').map(Number);
+    return os * 60 + om < e && oe * 60 + om2 > s;
+  });
 
-                          <div className="flex justify-between text-black">
-                            <span>{evt.title}</span>
-                            <input
-                              type="checkbox"
-                              checked={evt.completed}
-                              onChange={()=>toggleComplete(dk,evt.id)}
-                            />
-                          </div>
-                          <div className="text-[10px] text-black">
+  const idx = overlaps.findIndex(x => x.id === evt.id);
+  const wPct = 100 / overlaps.length;
+  const lPct = idx * wPct;
+  const topPx = (s - base) / 15 * 12;
+  const hPx = (e - s) / 15 * 12;
+
+  return (
+    <motion.div
+      key={evt.id}
+      draggable
+      onDragStart={e => handleDragStart(e, evt, dk)}
+      onMouseEnter={() => setHoveredEvent(evt.id)}
+      onMouseLeave={() => setHoveredEvent(null)}
+      className={`${categoryColors[evt.category]} absolute m-1 p-1 text-xs rounded ${
+        evt.completed ? 'opacity-50 line-through' : ''
+      }`}
+      style={{
+        top: `${topPx}px`,
+        left: `${lPct}%`,
+        width: `${wPct}%`,
+        minHeight: `${hPx}px`,
+        whiteSpace: 'normal',
+        overflowWrap: 'break-word',
+        zIndex: hoveredEvent === evt.id && evt.details ? 10 : 1,
+      }}
+      layout
+      animate={{
+        height: hoveredEvent === evt.id && evt.details ? 'auto' : hPx,
+      }}
+      transition={{ type: 'spring', stiffness: 200, damping: 25 }}
+    >
+      {/* color picker */}
+      {hoveredEvent === evt.id && wPct > 50 && (
+  <div className="absolute top-1 left-1 flex gap-1">
+    {colorOptions.map(c => (
+      <button
+        key={c}
+        onClick={() => setCategoryColors(pc => ({ ...pc, [evt.category]: c }))}
+        className={`${c} w-2.5 h-2.5 rounded-full border border-white hover:scale-110`}
+      />
+    ))}
+  </div>
+)}
+
+<div className="flex justify-between text-black">
+  <span>{evt.title}</span>
+  <input
+    type="checkbox"
+    checked={evt.completed}
+    onChange={() => toggleComplete(dk, evt.id)}
+  />
+</div>
+
+<div className="text-[10px] text-black">
   {formatTime(evt.startTime)} – {formatTime(evt.endTime)}
 </div>
 
-                        </div>
-                      );
-                    })}
+{hoveredEvent === evt.id && evt.details && (
+  <div className="mt-1 text-[10px] text-black whitespace-pre-wrap">
+    {evt.details}
+  </div>
+)}
+
+{hoveredEvent === evt.id && (
+  evt.details ? (
+    // Show buttons BELOW the details if details exist
+    <div className="flex justify-end mt-1 space-x-1">
+      <button
+        onClick={() => {
+          setEditingEvent({ ...evt, dateKey: dk });
+          setEditFields({
+            title: evt.title,
+            start: evt.startTime,
+            end: evt.endTime,
+            details: evt.details || ''
+          });
+        }}
+        className="text-black text-xs bg-white px-1 rounded shadow"
+      >
+        ✏️ 
+      </button>
+      <button
+        onClick={() => deleteEvent(dk, evt.id)}
+        className="text-black text-xs bg-white px-1 rounded shadow"
+      >
+        🗑️
+      </button>
+    </div>
+  ) : (
+    // Show buttons in the bottom-right corner if NO details
+    <>
+      <button
+        onClick={() => {
+          setEditingEvent({ ...evt, dateKey: dk });
+          setEditFields({
+            title: evt.title,
+            start: evt.startTime,
+            end: evt.endTime,
+            details: evt.details || ''
+          });
+        }}
+        className="absolute bottom-1 right-8 text-black text-xs bg-white px-1 rounded shadow"
+      >
+        ✏️
+      </button>
+      <button
+        onClick={() => deleteEvent(dk, evt.id)}
+        className="absolute bottom-1 right-1 text-black text-xs bg-white px-1 rounded shadow"
+      >
+        🗑️
+      </button>
+    </>
+  )
+)}
+
+    </motion.div>
+  );
+})}
+
                   </motion.div>
                 ))}
               </React.Fragment>
             ))}
           </div>
-        </div>
+          {editingEvent && (
+  <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+    <div className="bg-white rounded-lg p-4 w-full max-w-md shadow-lg space-y-4">
+      <h2 className="text-lg font-semibold">Edit Event</h2>
+
+      <input
+        className="w-full border p-2 text-sm"
+        placeholder="Title"
+        value={editFields.title}
+        onChange={e => setEditFields(f => ({ ...f, title: e.target.value }))}
+      />
+      <input
+        className="w-full border p-2 text-sm"
+        placeholder="Start Time (HH:MM)"
+        value={editFields.start}
+        onChange={e => setEditFields(f => ({ ...f, start: e.target.value }))}
+      />
+      <input
+        className="w-full border p-2 text-sm"
+        placeholder="End Time (HH:MM)"
+        value={editFields.end}
+        onChange={e => setEditFields(f => ({ ...f, end: e.target.value }))}
+      />
+      <textarea
+        className="w-full border p-2 text-sm"
+        placeholder="Details (optional)"
+        rows={3}
+        value={editFields.details}
+        onChange={e => setEditFields(f => ({ ...f, details: e.target.value }))}
+      />
+
+      <div className="flex justify-end space-x-2">
+        <button
+          className="bg-gray-300 px-3 py-1 rounded"
+          onClick={() => setEditingEvent(null)}
+        >
+          Cancel
+        </button>
+        <button
+          className="bg-blue-600 text-white px-3 py-1 rounded"
+          onClick={() => {
+            const { dateKey, id, title, startTime, endTime } = editingEvent;
+            const isChangingDetails = editFields.details && editFields.details !== editingEvent.details;
+          
+            const applyUpdate = (applyToAll = false) => {
+              setEvents(prev => {
+                const updated = { ...prev };
+                for (const [dk, list] of Object.entries(prev)) {
+                  updated[dk] = list.map(evt => {
+                    const match =
+                      evt.title === title &&
+                      evt.startTime === startTime &&
+                      evt.endTime === endTime;
+          
+                    if ((applyToAll && match) || (!applyToAll && dk === dateKey && evt.id === id)) {
+                      return {
+                        ...evt,
+                        title: editFields.title,
+                        startTime: editFields.start,
+                        endTime: editFields.end,
+                        details: editFields.details,
+                      };
+                    }
+                    return evt;
+                  });
+                }
+                return updated;
+              });
+          
+              setEditingEvent(null);
+            };
+          
+            if (isChangingDetails) {
+              const confirmAll = window.confirm(
+                'Do you want to add these details to all matching events with the same title and time?'
+              );
+              applyUpdate(confirmAll);
+            } else {
+              applyUpdate(false);
+            }
+          }}
+          
+        >
+          Save
+        </button>
       </div>
     </div>
+  </div>
+)}
+
+        </div>
+      </div>
+      </div>
   );
 }
