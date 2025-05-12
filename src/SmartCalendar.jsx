@@ -576,8 +576,8 @@ return (
 
         {/* DAY HEADERS + ADD FORMS */}
         <div className="px-4">
-  <div className="grid grid-cols-[100px_repeat(7,1fr)] gap-1 mb-2">
-          <div /> 
+        <div className="grid grid-cols-[100px_repeat(7,1fr)] gap-1 mb-2 sticky top-0 z-40 bg-white">
+        <div /> 
           {dateKeys.map((dk, idx) => (
             <div key={dk} className="border-b pb-2">
 <div
@@ -776,7 +776,7 @@ return (
         </div>
         </div>
         {/* TIME GRID + EVENTS */}
-        <div className="relative overflow-y-auto max-h-[80vh]">
+        <div className="relative overflow-y-auto max-h-[70vh]">
         <div className="px-4">
   <div className="grid grid-cols-[100px_repeat(7,1fr)] gap-1">
         {gridHours.map(h=>(
@@ -801,7 +801,7 @@ return (
                       if (ampm === 'AM' && hour === 12) hour = 0;
                       handleDrop(e, dk, hour);
                     }}
-                                        initial={{ minHeight:24 }}
+                                        initial={{ minHeight:20 }}
                     animate={{ minHeight:24 }}
                     transition={{ duration:0.2 }}
                   >
