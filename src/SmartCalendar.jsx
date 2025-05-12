@@ -361,11 +361,40 @@ const getNextEvent = () => {
   // ------------- TASK HELPERS -------------
   const addTask = dk => {
     const txt = taskInput[dk] || '';
+    const repeat = formVisible[`taskRepeat-${dk}`] || 'None';
     if (!txt) return;
-    const tk = { id:Date.now(), text:txt, completed:false };
-    setTasks(ts=>({ ...ts, [dk]: [ ...(ts[dk]||[]), tk ] }));
-    setTaskInput(ti=>({ ...ti, [dk]: '' }));
+  
+    const taskId = Date.now();
+    const baseTask = { id: taskId, text: txt, completed: false };
+  
+    setTasks(prev => {
+      const updated = { ...prev };
+      const pushOn = iso => {
+        if (!updated[iso]) updated[iso] = [];
+        updated[iso].push({ ...baseTask });
+      };
+  
+      pushOn(dk);
+  
+      if (repeat !== 'None') {
+        const limit = new Date(); limit.setMonth(limit.getMonth() + 3);
+        const step = repeat === 'Daily' ? 1 : 7;
+        const tmp = new Date(dk);
+        while (tmp <= limit) {
+          tmp.setDate(tmp.getDate() + step);
+          const iso = tmp.toISOString().split('T')[0];
+          pushOn(iso);
+        }
+      }
+  
+      return updated;
+    });
+  
+    // Clear input and repeat state
+    setTaskInput(ti => ({ ...ti, [dk]: '' }));
+    setFormVisible(fv => ({ ...fv, [`taskRepeat-${dk}`]: 'None' }));
   };
+  
   const updateTaskText    = (dk,id,txt) => setTasks(ts=>({
     ...ts,
     [dk]: ts[dk].map(t=> t.id===id ? { ...t, text: txt } : t )
@@ -662,13 +691,27 @@ return (
 
               {formVisible[`tasks-${dk}`] && (
                 <motion.div initial={{ height:0, opacity:0 }} animate={{ height:'auto', opacity:1 }} className="mt-2 p-2 bg-gray-100 rounded space-y-2">
-                  <input
-                    placeholder="New Task"
-                    className="w-full border p-1 text-sm"
-                    value={taskInput[dk]||''}
-                    onChange={e=>setTaskInput(ti=>({...ti, [dk]: e.target.value}))}
-                    onKeyDown={e=>e.key==='Enter' && addTask(dk)}
-                  />
+<div className="flex gap-2 items-center">
+  <input
+    placeholder="New Task"
+    className="flex-1 border p-1 text-sm"
+    value={taskInput[dk] || ''}
+    onChange={e => setTaskInput(ti => ({ ...ti, [dk]: e.target.value }))}
+    onKeyDown={e => e.key === 'Enter' && addTask(dk)}
+  />
+  <select
+    className="border p-1 text-sm"
+    value={formVisible[`taskRepeat-${dk}`] || 'None'}
+    onChange={e =>
+      setFormVisible(fv => ({ ...fv, [`taskRepeat-${dk}`]: e.target.value }))
+    }
+  >
+    <option value="None">No Repeat</option>
+    <option value="Daily">Daily</option>
+    <option value="Weekly">Weekly</option>
+  </select>
+</div>
+
                   <button
                     onClick={()=>addTask(dk)}
                     className="w-full bg-gray-700 text-white py-1 rounded"
