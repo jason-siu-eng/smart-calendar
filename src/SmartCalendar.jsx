@@ -162,9 +162,6 @@ const getNextEvent = () => {
   return upcoming[0];
 };
 
-
-
-
   // On mount: if URL hash has a token, grab it
   useEffect(() => {
     dateKeys.forEach(dk => {
@@ -405,6 +402,13 @@ const getNextEvent = () => {
     ...ts,
     [dk]: ts[dk].map(t=> t.id===id ? { ...t, completed: !t.completed } : t )
   }));
+  const deleteTask = (dk, id) => {
+    setTasks(ts => ({
+      ...ts,
+      [dk]: ts[dk].filter(t => t.id !== id)
+    }));
+  };
+  
 
   // ------------- EVENT TOGGLES & DELETE -------------
   const toggleComplete = (dk,id) => setEvents(ev=>({
@@ -720,27 +724,49 @@ return (
                   >Add Task</button>
                   <ul className="space-y-1">
                     {(tasks[dk]||[]).map(t=>(
-                      <li key={t.id} className={`flex justify-between items-center p-1 rounded ${
-                        t.completed ? 'opacity-50 bg-gray-300' : 'bg-blue-200'
-                      }`}>
-                        {editingTask===t.id ? (
-                          <input
-                            autoFocus
-                            className="flex-1 border p-1 text-sm"
-                            value={t.text}
-                            onChange={e=>updateTaskText(dk,t.id,e.target.value)}
-                            onBlur={()=>setEditingTask(null)}
-                            onKeyDown={e=>e.key==='Enter'&&setEditingTask(null)}
-                          />
-                        ) : (
-                          <span onDoubleClick={()=>setEditingTask(t.id)}>{t.text}</span>
-                        )}
-                        <input
-                          type="checkbox"
-                          checked={t.completed}
-                          onChange={()=>toggleTaskComplete(dk,t.id)}
-                        />
-                      </li>
+                      <li
+  key={t.id}
+  className={`flex justify-between items-center p-1 rounded ${
+    t.completed ? 'opacity-50 bg-gray-300' : 'bg-blue-200'
+  }`}
+>
+  <div className="flex-1">
+    {editingTask === t.id ? (
+      <input
+        autoFocus
+        className="w-full border p-1 text-sm"
+        value={t.text}
+        onChange={e => updateTaskText(dk, t.id, e.target.value)}
+        onBlur={() => setEditingTask(null)}
+        onKeyDown={e => e.key === 'Enter' && setEditingTask(null)}
+      />
+    ) : (
+      <span
+        onDoubleClick={() => setEditingTask(t.id)}
+        className="cursor-text"
+      >
+        {t.text}
+      </span>
+    )}
+  </div>
+
+  <div className="flex items-center space-x-2 ml-2">
+  <button
+    onClick={() => deleteTask(dk, t.id)}
+    className="text-red-600 hover:text-red-800 text-xs"
+    title="Delete task"
+  >
+    🗑️
+  </button>
+  <input
+    type="checkbox"
+    checked={t.completed}
+    onChange={() => toggleTaskComplete(dk, t.id)}
+  />
+</div>
+
+</li>
+
                     ))}
                   </ul>
                 </motion.div>
