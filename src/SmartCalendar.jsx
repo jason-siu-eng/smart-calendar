@@ -28,7 +28,7 @@ const days          = ['Monday','Tuesday','Wednesday','Thursday','Friday','Satur
 const CLIENT_ID      = '860532901417-eos75c7iicf4n31tf4sapahjugpd7hmn.apps.googleusercontent.com';
 const API_KEY        = 'AIzaSyAGM86BLqXWdSQ_iQFA5hYVNn_IcghxdzM';
 const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"];
-const SCOPES         = "https://www.googleapis.com/auth/calendar.readonly";
+const SCOPES         = "https://www.googleapis.com/auth/calendar";
 
 // ------------- HELPERS -------------
 function startOfWeek(date) {
@@ -141,7 +141,6 @@ useEffect(() => {
   }
 }, []);
 
-
 // upcoming event
 
 const getNextEvent = () => {
@@ -251,7 +250,9 @@ const getNextEvent = () => {
         });
         return nxt;
       });
-    } catch(e) {
+    }
+    
+    catch(e) {
       console.error('Google fetch error:', e);
     }
   }
@@ -270,7 +271,7 @@ const getNextEvent = () => {
       }
     });
   }, [startHours, startMins, dateKeys, userSetEndTime]);
-  
+   
 
   // ------------- FORM HELPERS -------------
   const toggleForm = key => setFormVisible(f=>({ ...f, [key]: !f[key] }));
@@ -329,6 +330,7 @@ const getNextEvent = () => {
         nxt[iso].push({ ...base });
       };
       pushOn(dk);
+
       if (rpt !== 'None') {
         const limit = new Date(); limit.setMonth(limit.getMonth()+3);
         const step  = rpt === 'Daily' ? 1 : 7;
@@ -748,7 +750,7 @@ return (
         </div>
         </div>
         {/* TIME GRID + EVENTS */}
-        <div className="relative overflow-y-auto max-h-[70vh]">
+        <div className="relative overflow-y-auto max-h-[80vh]">
         <div className="px-4">
   <div className="grid grid-cols-[100px_repeat(7,1fr)] gap-1">
         {gridHours.map(h=>(
@@ -773,8 +775,8 @@ return (
                       if (ampm === 'AM' && hour === 12) hour = 0;
                       handleDrop(e, dk, hour);
                     }}
-                                        initial={{ minHeight:48 }}
-                    animate={{ minHeight:48 }}
+                                        initial={{ minHeight:24 }}
+                    animate={{ minHeight:24 }}
                     transition={{ duration:0.2 }}
                   >
                     {/* drop highlight */}
@@ -838,8 +840,8 @@ return (
   const idx = overlaps.findIndex(x => x.id === evt.id);
   const wPct = 100 / overlaps.length;
   const lPct = idx * wPct;
-  const topPx = (s - base) / 15 * 12;
-  const hPx = (e - s) / 15 * 12;
+  const topPx = (s - base) / 15 * 9;
+  const hPx = (e - s) / 15 * 9;
 
   return (
     <motion.div
