@@ -322,23 +322,31 @@ const getNextEvent = () => {
   
     setEvents(prev => {
       const nxt = { ...prev };
+      const pushed = new Set();
+    
       const pushOn = iso => {
         if (!nxt[iso]) nxt[iso] = [];
+        if (pushed.has(iso)) return; // Prevent duplicate pushes
+        pushed.add(iso);
         nxt[iso].push({ ...base });
       };
+    
       pushOn(dk);
-
       if (rpt !== 'None') {
-        const limit = new Date(); limit.setMonth(limit.getMonth()+3);
-        const step  = rpt === 'Daily' ? 1 : 7;
-        const tmp   = new Date(dk);
+        const limit = new Date();
+        limit.setMonth(limit.getMonth() + 3);
+        const step = rpt === 'Daily' ? 1 : 7;
+        const tmp = new Date(dk);
         while (tmp <= limit) {
           tmp.setDate(tmp.getDate() + step);
-          pushOn(tmp.toISOString().split('T')[0]);
+          const iso = tmp.toISOString().split('T')[0];
+          pushOn(iso);
         }
       }
+    
       return nxt;
     });
+    
   
     // Reset form
     setFormVisible(fv => ({
@@ -358,41 +366,48 @@ const getNextEvent = () => {
   
 
   // ------------- TASK HELPERS -------------
-  const addTask = dk => {
-    const txt = taskInput[dk] || '';
-    const repeat = formVisible[`taskRepeat-${dk}`] || 'None';
-    if (!txt) return;
-  
-    const taskId = Date.now();
-    const baseTask = { id: taskId, text: txt, completed: false };
-  
-    setTasks(prev => {
-      const updated = { ...prev };
-      const pushOn = iso => {
-        if (!updated[iso]) updated[iso] = [];
-        updated[iso].push({ ...baseTask });
-      };
-  
+const addTask = dk => {
+  const txt = taskInput[dk] || '';
+  const repeat = formVisible[`taskRepeat-${dk}`] || 'None';
+  if (!txt) return;
+
+  const taskId = Date.now();
+  const baseTask = { id: taskId, text: txt, completed: false };
+
+  setTasks(prev => {
+    const updated = { ...prev };
+    const pushed = new Set();
+
+    const pushOn = iso => {
+      if (!updated[iso]) updated[iso] = [];
+      if (pushed.has(iso)) return; // ✅ Avoid duplicate
+      pushed.add(iso);
+      updated[iso].push({ ...baseTask });
+    };
+
+    if (repeat === 'None') {
       pushOn(dk);
-  
-      if (repeat !== 'None') {
-        const limit = new Date(); limit.setMonth(limit.getMonth() + 3);
-        const step = repeat === 'Daily' ? 1 : 7;
-        const tmp = new Date(dk);
-        while (tmp <= limit) {
-          tmp.setDate(tmp.getDate() + step);
-          const iso = tmp.toISOString().split('T')[0];
-          pushOn(iso);
-        }
+    } else {
+      const limit = new Date();
+      limit.setMonth(limit.getMonth() + 3);
+      const step = repeat === 'Daily' ? 1 : 7;
+      const tmp = new Date(dk);
+      while (tmp <= limit) {
+        const iso = tmp.toISOString().split('T')[0];
+        pushOn(iso);
+        tmp.setDate(tmp.getDate() + step);
       }
+    }
+
+    return updated;
+  });
+
+  // Clear input and repeat state
+  setTaskInput(ti => ({ ...ti, [dk]: '' }));
+  setFormVisible(fv => ({ ...fv, [`taskRepeat-${dk}`]: 'None' }));
+};
+
   
-      return updated;
-    });
-  
-    // Clear input and repeat state
-    setTaskInput(ti => ({ ...ti, [dk]: '' }));
-    setFormVisible(fv => ({ ...fv, [`taskRepeat-${dk}`]: 'None' }));
-  };
   
   const updateTaskText    = (dk,id,txt) => setTasks(ts=>({
     ...ts,
@@ -690,87 +705,111 @@ return (
   className="relative mt-1 w-full bg-gray-600 text-white py-1 text-sm rounded text-center"
 >
   Tasks
-  {hasIncompleteTasks(dk) && (
-    <span className="absolute right-2 top-1.35 transform -translate-y-1/2 text-red-400 font-bold animate-bounce">!</span>
-  )}
+  {dk === new Date().toLocaleDateString('sv-SE') && hasIncompleteTasks(dk) && (
+  <span className="absolute right-2 top-1.5 transform -translate-y-1/2 text-red-400 font-bold animate-bounce">!</span>
+)}
+
 </button>
 
-              {formVisible[`tasks-${dk}`] && (
-                <motion.div initial={{ height:0, opacity:0 }} animate={{ height:'auto', opacity:1 }} className="mt-2 p-2 bg-gray-100 rounded space-y-2">
-<div className="flex gap-2 items-center">
-  <input
-    placeholder="New Task"
-    className="flex-1 border p-1 text-sm"
-    value={taskInput[dk] || ''}
-    onChange={e => setTaskInput(ti => ({ ...ti, [dk]: e.target.value }))}
-    onKeyDown={e => e.key === 'Enter' && addTask(dk)}
-  />
-  <select
-    className="border p-1 text-sm"
-    value={formVisible[`taskRepeat-${dk}`] || 'None'}
-    onChange={e =>
-      setFormVisible(fv => ({ ...fv, [`taskRepeat-${dk}`]: e.target.value }))
-    }
+{formVisible[`tasks-${dk}`] && (
+  <form
+    onSubmit={e => {
+      e.preventDefault();
+      addTask(dk);
+    }}
+    className="mt-2 space-y-2"
   >
-    <option value="None">No Repeat</option>
-    <option value="Daily">Daily</option>
-    <option value="Weekly">Weekly</option>
-  </select>
-</div>
+    <motion.div
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      className="p-2 bg-gray-100 rounded space-y-2"
+    >
+      <div className="flex gap-2 items-center">
+        <input
+          placeholder="New Task"
+          className="flex-1 border p-1 text-sm"
+          value={taskInput[dk] || ''}
+          onChange={e =>
+            setTaskInput(ti => ({ ...ti, [dk]: e.target.value }))
+          }
+        />
+        <select
+          className="border p-1 text-sm"
+          value={formVisible[`taskRepeat-${dk}`] || 'None'}
+          onChange={e =>
+            setFormVisible(fv => ({
+              ...fv,
+              [`taskRepeat-${dk}`]: e.target.value,
+            }))
+          }
+        >
+          <option value="None">No Repeat</option>
+          <option value="Daily">Daily</option>
+          <option value="Weekly">Weekly</option>
+        </select>
+      </div>
 
-                  <button
-                    onClick={()=>addTask(dk)}
-                    className="w-full bg-gray-700 text-white py-1 rounded"
-                  >Add Task</button>
-                  <ul className="space-y-1">
-                    {(tasks[dk]||[]).map(t=>(
-                      <li
-  key={t.id}
-  className={`flex justify-between items-center p-1 rounded ${
-    t.completed ? 'opacity-50 bg-gray-300' : 'bg-blue-200'
-  }`}
->
-  <div className="flex-1">
-    {editingTask === t.id ? (
-      <input
-        autoFocus
-        className="w-full border p-1 text-sm"
-        value={t.text}
-        onChange={e => updateTaskText(dk, t.id, e.target.value)}
-        onBlur={() => setEditingTask(null)}
-        onKeyDown={e => e.key === 'Enter' && setEditingTask(null)}
-      />
-    ) : (
-      <span
-        onDoubleClick={() => setEditingTask(t.id)}
-        className="cursor-text"
+      <button
+        type="submit"
+        className="w-full bg-gray-700 text-white py-1 rounded"
       >
-        {t.text}
-      </span>
-    )}
-  </div>
+        Add Task
+      </button>
 
-  <div className="flex items-center space-x-2 ml-2">
-  <button
-    onClick={() => deleteTask(dk, t.id)}
-    className="text-red-600 hover:text-red-800 text-xs"
-    title="Delete task"
-  >
-    🗑️
-  </button>
-  <input
-    type="checkbox"
-    checked={t.completed}
-    onChange={() => toggleTaskComplete(dk, t.id)}
-  />
-</div>
-
-</li>
-
-                    ))}
-                  </ul>
-                </motion.div>
+      <ul className="space-y-1">
+        {(tasks[dk] || []).map(t => (
+          <li
+            key={t.id}
+            className={`flex justify-between items-center p-1 rounded ${
+              t.completed ? 'opacity-50 bg-gray-300' : 'bg-blue-200'
+            }`}
+          >
+            <div className="flex-1">
+              {editingTask === t.id ? (
+                <input
+                  autoFocus
+                  className="w-full border p-1 text-sm"
+                  value={t.text}
+                  onChange={e =>
+                    updateTaskText(dk, t.id, e.target.value)
+                  }
+                  onBlur={() => setEditingTask(null)}
+                  onKeyDown={e =>
+                    e.key === 'Enter' && setEditingTask(null)
+                  }
+                />
+              ) : (
+                <span
+                  onDoubleClick={() => setEditingTask(t.id)}
+                  className="cursor-text"
+                >
+                  {t.text}
+                </span>
               )}
+            </div>
+
+            <div className="flex items-center space-x-2 ml-2">
+              <button
+                onClick={() => deleteTask(dk, t.id)}
+                className="text-red-600 hover:text-red-800 text-xs"
+                title="Delete task"
+              >
+                🗑️
+              </button>
+              <input
+                type="checkbox"
+                checked={t.completed}
+                onChange={() => toggleTaskComplete(dk, t.id)}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </motion.div>
+  </form>
+)}
+
+              
             </div>
           ))}
         </div>
