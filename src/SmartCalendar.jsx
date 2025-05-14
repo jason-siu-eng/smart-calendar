@@ -564,6 +564,18 @@ return (
   )}
 </div>
 
+{/* Remaining Tasks Badge */}
+{(() => {
+  const todayKey = new Date().toLocaleDateString('sv-SE');
+  const remainingTasks = (tasks[todayKey] || []).filter(t => !t.completed).length;
+  return remainingTasks > 0 && (
+    <div className="ml-4 bg-red-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow">
+      🔔 {remainingTasks} task{remainingTasks > 1 ? 's' : ''} left today
+    </div>
+  );
+})()}
+
+
 
 
     {accessToken ? (
